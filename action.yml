@@ -1,0 +1,46 @@
+name: 'Terraform ChatOps'
+description: 'Terraform ChatOps'
+
+inputs:
+  dir:
+    required: true
+    type: string
+  ref:
+    required: true
+    type: string
+  terraform_version:
+    required: false
+    type: string
+  tfc_token:
+    required: false
+
+runs:
+  using: composite
+  steps:
+    - id: sha
+      uses: actions/github-script@v5
+      with:
+        result-encoding: string
+        script: |
+          const { owner, repo, number } = context.issue
+          const pr = await github.rest.pulls.get({ owner, repo, pull_number: number })
+          return pr.data.head.sha
+    - uses: actions/checkout@v2
+      with:
+        ref: ${{ steps.sha.outputs.result }}
+        path: tmp-chatops
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v1
+      with:
+        terraform_version: ${{ inputs.terraform_version }}
+        cli_config_credentials_token: ${{ inputs.tfc_token }}
+    - uses: actions/github-script@v5
+      with:
+        script: |
+          await require('${{ github.action_path }}/index.js')({
+            github,
+            context,
+            glob,
+            exec,
+            dir: 'tmp-chatops/${{ inputs.dir }}'
+          })
